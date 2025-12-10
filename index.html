@@ -1,0 +1,656 @@
+import React, { useState, useEffect } from 'react';
+import { Plane, Music, Copy, Sparkles, MapPin, Radio, Mic2, Disc, Check, Loader2, AlignLeft, FileText, Languages, Guitar, Image, Video, Hash } from 'lucide-react';
+
+const SunoPromptBuilder = () => {
+  // --- Global Config ---
+  const apiKey = ""; // 런타임 환경에서 API 키가 자동 제공됩니다.
+
+  // --- State Management ---
+  const [activeTab, setActiveTab] = useState("custom"); 
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  
+  // 생성된 결과물 상태 (확장됨)
+  const [generatedResult, setGeneratedResult] = useState({
+    title: "",
+    prompt: "",
+    lyrics: "",
+    albumArt: "",       // New: 앨범 아트 프롬프트
+    story: ""           // New: 유튜브 영상 설명 및 스토리
+  });
+  
+  // 복사 상태 관리
+  const [copyStatus, setCopyStatus] = useState({ 
+    title: false, 
+    prompt: false, 
+    lyrics: false,
+    albumArt: false,
+    story: false 
+  });
+
+  // 커스텀 모드 입력 상태
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedVibe, setSelectedVibe] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState("");
+  const [selectedTempo, setSelectedTempo] = useState("Mid-Tempo");
+  
+  // 언어 선택 상태
+  const [lyricsLanguage, setLyricsLanguage] = useState("Korean"); 
+
+  // --- Data: 50+ Global Locations with Context ---
+  const locationGroups = {
+    "Asia (아시아)": [
+      { name: "서울 한강 공원 (Seoul)", value: "Han River Park at Night, Seoul", context: "K-Indie, Sentimental Ballad, City Lights, Soju vibe" },
+      { name: "도쿄 시부야 거리 (Tokyo)", value: "Shibuya Crossing, Tokyo", context: "J-Pop, City Pop, Neon lights, Busy, Energetic" },
+      { name: "교토의 고즈넉한 사원 (Kyoto)", value: "Kyoto Old Temple", context: "Traditional Asian Instruments, Koto, Zen, Peaceful, Nature" },
+      { name: "홍콩의 밤거리 (Hong Kong)", value: "Hong Kong Night Market", context: "Cyberpunk, Synthwave, Neon, Rain, Cantonese vibe" },
+      { name: "상하이 와이탄 (Shanghai)", value: "The Bund, Shanghai", context: "Nu-Jazz, Sophisticated, Piano Lounge, Luxury" },
+      { name: "방콕 카오산 로드 (Bangkok)", value: "Khaosan Road, Bangkok", context: "Tropical House, Upbeat, Party, Street Food, Energetic" },
+      { name: "발리 우붓의 숲 (Bali)", value: "Ubud Rainforest, Bali", context: "Gamelan, Meditation, Ambient, Nature Sounds, Healing" },
+      { name: "타이베이의 비 오는 거리 (Taipei)", value: "Rainy Street in Taipei", context: "Mandopop Ballad, Nostalgic, Acoustic Guitar, Rain" },
+      { name: "경성(서울) 1930s", value: "1930s Kyungsung", context: "Swing Jazz, Accordion, Retro Korean, Modern Boy" },
+      { name: "몰디브 해변 (Maldives)", value: "Maldives Resort Beach", context: "Tropical Chill, Ukulele, Ocean Waves, Bright" }
+    ],
+    "Europe (유럽)": [
+      { name: "런던 타워브릿지 (London)", value: "Tower Bridge, London", context: "Britpop, Alternative Rock, Foggy, Melancholic" },
+      { name: "파리 에펠탑 아래 (Paris)", value: "Under the Eiffel Tower, Paris", context: "French Chanson, Accordion, Romantic, Waltz" },
+      { name: "베를린 클럽 (Berlin)", value: "Underground Club in Berlin", context: "Minimal Techno, Industrial, Dark, Bass-heavy" },
+      { name: "로마 콜로세움 (Rome)", value: "Colosseum, Rome", context: "Italian Opera fusion, Epic, Orchestral, History" },
+      { name: "베네치아 운하 (Venice)", value: "Venice Canals", context: "Classical Guitar, Serenade, Romantic, Water sounds" },
+      { name: "산토리니 (Santorini)", value: "Santorini Sunset", context: "Mediterranean Folk, Acoustic, Bright, breezy" },
+      { name: "프라하 올드타운 (Prague)", value: "Old Town Square, Prague", context: "Classical Crossover, Violin, Romantic, Bohemain" },
+      { name: "바르셀로나 해변 (Barcelona)", value: "Barceloneta Beach", context: "Latin Pop, Flamenco Guitar, Passionate, Summer" },
+      { name: "아이슬란드 오로라 (Iceland)", value: "Icelandic Aurora", context: "Post-Rock, Ethereal, Sigur Ros vibe, Space, Reverb" },
+      { name: "스위스 알프스 (Swiss Alps)", value: "Swiss Alps Mountain", context: "Yodeling fusion, Folk, Orchestral, Majestic, Fresh air" },
+      { name: "암스테르담 운하 (Amsterdam)", value: "Amsterdam Canals", context: "Lo-fi Hip Hop, Chill, Bicycle bell sounds, Relaxed" },
+      { name: "이스탄불 그랜드 바자르 (Istanbul)", value: "Grand Bazaar, Istanbul", context: "Middle Eastern Instruments, Oud, Mystic, Exotic" }
+    ],
+    "North America (북미)": [
+      { name: "뉴욕 타임스퀘어 (New York)", value: "Times Square, NYC", context: "East Coast Hip Hop, Jazz Rap, Urban, Busy, Siren sounds" },
+      { name: "브루클린 재즈바 (Brooklyn)", value: "Brooklyn Jazz Bar", context: "Cool Jazz, Double Bass, Smoky, Saxophone solo" },
+      { name: "LA 산타모니카 비치 (Los Angeles)", value: "Santa Monica Beach, LA", context: "West Coast Rock, Surf Rock, Driving, Sunny" },
+      { name: "라스베이거스 (Las Vegas)", value: "Las Vegas Strip", context: "Big Band, Show tune, Glitz, Glamour, Upbeat" },
+      { name: "마이애미 사우스비치 (Miami)", value: "Miami South Beach", context: "Synthwave, 80s Retro, Neon, Party" },
+      { name: "시카고 블루스 클럽 (Chicago)", value: "Chicago Blues Club", context: "Chicago Blues, Electric Guitar, Soulful, Gritty" },
+      { name: "뉴올리언스 프렌치쿼터 (New Orleans)", value: "French Quarter, New Orleans", context: "Dixieland Jazz, Brass Band, Funky, Festive" },
+      { name: "하와이 와이키키 (Hawaii)", value: "Waikiki Beach, Hawaii", context: "Hawaiian Folk, Slack Key Guitar, Hula, Relaxed" },
+      { name: "밴쿠버의 겨울 (Vancouver)", value: "Winter in Vancouver", context: "Indie Folk, Acoustic, Rainy, Cozy" }
+    ],
+    "South America (남미)": [
+      { name: "리우 코파카바나 (Rio)", value: "Copacabana Beach, Rio", context: "Bossa Nova, Samba, Percussion, Soft Vocals, Warm" },
+      { name: "부에노스아이레스 (Buenos Aires)", value: "Streets of Buenos Aires", context: "Tango, Bandoneon, Passionate, Dramatic" },
+      { name: "아바나 말레콘 (Havana)", value: "Malecon, Havana", context: "Afro-Cuban Jazz, Salsa, Piano, Rhythmic" },
+      { name: "칸쿤 리조트 (Cancun)", value: "Cancun Resort Party", context: "Reggaeton, Tropical, Dance, Summer vibe" }
+    ],
+    "Others (기타)": [
+      { name: "시드니 오페라 하우스 (Sydney)", value: "Sydney Harbour", context: "Modern Pop, Uplifting, Fresh, Ocean breeze" },
+      { name: "카이로 피라미드 (Cairo)", value: "Pyramids of Giza", context: "Egyptian Folk, Arabic Scales, Mystery, Ancient" },
+      { name: "두바이 사막 (Dubai)", value: "Dubai Desert Safari", context: "Arabic Trap, Luxury, Beat-heavy, Exotic" },
+      { name: "케이프타운 (Cape Town)", value: "Cape Town Coast", context: "Afrobeats, Rhythm, Joyful, Sunny" }
+    ]
+  };
+
+  // --- Data: Genre Groups (New Feature) ---
+  const genreGroups = {
+    "✨ 에센셜 (Essentials - 기본 추천)": [
+      "Jazz (재즈)",
+      "Bossa Nova (보사노바)",
+      "Sentimental Ballad (감성 발라드)",
+      "Indie Pop (인디 팝)",
+      "Lo-fi Hip Hop (로파이 힙합)",
+      "Classical (클래식)",
+      "Acoustic Guitar Solo (기타 연주곡)",
+      "Cello Solo (첼로 연주곡)",
+      "Piano Solo (피아노 연주곡)"
+    ],
+    "🎹 일렉트로닉 & 팝 (Electronic & Pop)": [
+      "City Pop (시티팝)",
+      "Synthwave (신스웨이브)",
+      "Deep House (딥 하우스)",
+      "Chillout (칠아웃)",
+      "Dream Pop (드림팝)",
+      "R&B (알앤비)",
+      "Future Bass (퓨처 베이스)",
+      "Ambient (엠비언트)"
+    ],
+    "🎻 시네마틱 & 분위기 (Cinematic)": [
+      "Film Score (영화 음악)",
+      "Orchestral (오케스트라)",
+      "Noir Jazz (다크/느와르 재즈)",
+      "Ethereal (몽환적인)",
+      "Epic (웅장한)",
+      "New Age (뉴에이지)"
+    ],
+    "🎸 밴드 & 리듬 (Band & Rhythm)": [
+      "Soft Rock (소프트 락)",
+      "Alternative Rock (얼터너티브 락)",
+      "Funk (펑크)",
+      "Disco (디스코)",
+      "Soul (소울)",
+      "Blues (블루스)"
+    ],
+    "🌍 월드 뮤직 (World)": [
+      "French Chanson (샹송)",
+      "Latin Jazz (라틴 재즈)",
+      "Reggae (레게)",
+      "Celtic (켈틱)",
+      "Tango (탱고)"
+    ]
+  };
+
+  const vibes = [
+    "감성적이고 우울한 (Melancholic)",
+    "희망차고 벅찬 (Uplifting)",
+    "나른하고 편안한 (Chill)",
+    "긴장감 넘치는 (Tense)",
+    "달콤하고 사랑스러운 (Romantic)",
+    "신나고 펑키한 (Funky)",
+    "몽환적인 (Dreamy)",
+    "세련되고 도시적인 (Sophisticated)"
+  ];
+
+  const languageOptions = [
+    { label: "한국어 가사 (Korean)", value: "Korean" },
+    { label: "영어 가사 (English)", value: "English" },
+    { label: "프랑스어 가사 (French)", value: "French" },
+    { label: "스페인어 가사 (Spanish)", value: "Spanish" },
+    { label: "일본어 가사 (Japanese)", value: "Japanese" },
+    { label: "중국어 가사 (Chinese)", value: "Chinese" },
+    { label: "혼합 (Korean + English)", value: "Korean and English Mixed" },
+    { label: "Instrumental (가사 없음)", value: "Instrumental" }
+  ];
+
+  // --- Logic: Gemini API Call ---
+  const callGeminiAPI = async () => {
+    if (!selectedLocation || !selectedGenre) {
+      alert("장소와 장르를 입력해주세요!");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+    setGeneratedResult({ title: "", prompt: "", lyrics: "", albumArt: "", story: "" }); 
+
+    const isInstrumental = lyricsLanguage === "Instrumental";
+
+    // 선택된 장소의 context 찾기
+    let selectedContext = "";
+    Object.values(locationGroups).forEach(group => {
+      const found = group.find(loc => loc.value === selectedLocation);
+      if (found) selectedContext = found.context;
+    });
+
+    // 선택된 장르의 순수 영문명 추출 (예: "Jazz (재즈)" -> "Jazz")
+    const cleanGenre = selectedGenre.split('(')[0].trim();
+
+    // 프롬프트 엔지니어링 (확장됨)
+    const systemPrompt = `
+      You are an expert creative director for a music travel YouTube channel called "E-MusicVibe".
+      Your task is to generate a comprehensive creative package based on the user's inputs.
+      
+      Inputs:
+      - Location: ${selectedLocation}
+      - Location Context: ${selectedContext}
+      - Main Genre: ${cleanGenre}
+      - Target Mood: ${selectedVibe}
+      - Tempo: ${selectedTempo}
+      - Lyrics Language: ${lyricsLanguage}
+
+      Requirements:
+      1. **Song Title**: Create a creative and atmospheric song title. 
+         - Reflect the specific location's atmosphere.
+         - Language matches the lyrics language (or English if Instrumental).
+      
+      2. **Suno v5.0 Prompt**: Write a detailed style prompt. **MUST BE IN ENGLISH**. 
+         - Start with ${cleanGenre}.
+         - Include specific instruments (e.g., Accordion for Paris).
+         - Add mixing style, atmosphere, bpm. 
+         - Use comma-separated keywords.
+
+      3. **Lyrics**: 
+         - If 'Instrumental' is selected, set to null.
+         - Otherwise, write creative lyrics in **${lyricsLanguage}**. 
+         - Structure: [Verse], [Chorus], [Bridge].
+      
+      4. **Album Art Prompt** (New): Write a prompt for an AI image generator (like Midjourney).
+         - Describe a high-quality, atmospheric thumbnail image.
+         - Mention lighting, artistic style (e.g., "Cinematic lighting, 4k, digital art, lo-fi anime style" or "Oil painting style").
+         - Ensure it visually matches the music genre and location.
+         - End with aspect ratio "--ar 16:9".
+
+      5. **YouTube Description** (New): Write a short, engaging video description for the YouTube channel.
+         - Tone: "Audio Travel Guide" (inviting, immersive).
+         - Describe the scene the listener is "traveling" to.
+         - Add 5 relevant hashtags at the end.
+         - Language: Korean (since the app user is Korean).
+      
+      Output Format: JSON object with keys: "title", "prompt", "lyrics", "albumArt", "story".
+    `;
+
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json"
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const generatedText = data.candidates[0].content.parts[0].text;
+      const parsedResult = JSON.parse(generatedText);
+
+      setGeneratedResult({
+        title: parsedResult.title,
+        prompt: parsedResult.prompt,
+        lyrics: parsedResult.lyrics || (isInstrumental ? "Instrumental (가사 없음)" : ""),
+        albumArt: parsedResult.albumArt,
+        story: parsedResult.story
+      });
+
+    } catch (err) {
+      console.error("Gemini API Error:", err);
+      setError("AI 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      setGeneratedResult({
+        title: `${selectedLocation}의 여정`,
+        prompt: `${cleanGenre}, ${selectedContext}, ${selectedLocation}, ${selectedVibe}, ${selectedTempo} -- v 5.0`,
+        lyrics: isInstrumental ? "" : "API 오류로 가사를 생성하지 못했습니다.",
+        albumArt: "Cyberpunk street, neon lights, 4k --ar 16:9",
+        story: "AI 오류로 설명을 생성하지 못했습니다."
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Logic: Clipboard ---
+  const handleCopy = (text, key) => {
+    if (!text) return;
+    
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+      document.execCommand('copy');
+      setCopyStatus(prev => ({ ...prev, [key]: true }));
+      setTimeout(() => setCopyStatus(prev => ({ ...prev, [key]: false })), 2000);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+    
+    document.body.removeChild(textArea);
+  };
+
+  // --- UI Components ---
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-20">
+      
+      {/* Header */}
+      <header className="bg-slate-800 border-b border-slate-700 p-6 sticky top-0 z-20 shadow-lg">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg shadow-lg shadow-indigo-500/20">
+              <Plane size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                Travel Vibe Builder AI
+              </h1>
+              <p className="text-xs text-slate-400">Powered by Gemini & Suno v5.0</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-mono bg-slate-900 px-3 py-1 rounded-full border border-slate-700 text-slate-400">
+            <Sparkles size={12} className="text-yellow-400" />
+            AI All-In-One
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto p-6 space-y-8">
+        
+        {/* Input Section */}
+        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+            <Music size={120} />
+          </div>
+
+          <h2 className="text-lg font-semibold text-indigo-300 mb-6 flex items-center gap-2">
+            <Radio size={20} />
+            1. 컨셉 설정 (Concept Mix)
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+            {/* Left: Location & Genre */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm text-slate-400 font-medium">어디로 떠날까요? (50+ Locations)</label>
+                <div className="relative">
+                    <MapPin size={16} className="absolute left-3 top-3.5 text-slate-500" />
+                    <select 
+                    value={selectedLocation}
+                    onChange={(e) => setSelectedLocation(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-10 p-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                    >
+                    <option value="">여행지 선택...</option>
+                    {Object.entries(locationGroups).map(([groupName, locations]) => (
+                        <optgroup key={groupName} label={groupName} className="bg-slate-800 text-slate-300">
+                        {locations.map(loc => (
+                            <option key={loc.name} value={loc.value}>
+                            {loc.name}
+                            </option>
+                        ))}
+                        </optgroup>
+                    ))}
+                    </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-slate-400 font-medium">음악 장르 (30+ Genres)</label>
+                <div className="relative">
+                    <Guitar size={16} className="absolute left-3 top-3.5 text-slate-500" />
+                    <select 
+                      value={selectedGenre}
+                      onChange={(e) => setSelectedGenre(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-10 p-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors appearance-none"
+                    >
+                      <option value="">장르 선택...</option>
+                      {Object.entries(genreGroups).map(([groupName, genres]) => (
+                          <optgroup key={groupName} label={groupName} className="bg-slate-800 text-slate-300">
+                          {genres.map(genre => (
+                              <option key={genre} value={genre}>
+                              {genre}
+                              </option>
+                          ))}
+                          </optgroup>
+                      ))}
+                    </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Vibe & Options */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm text-slate-400 font-medium">분위기 & 템포</label>
+                <div className="flex gap-2">
+                  <select 
+                    value={selectedVibe}
+                    onChange={(e) => setSelectedVibe(e.target.value)}
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">분위기...</option>
+                    {vibes.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <select 
+                    value={selectedTempo}
+                    onChange={(e) => setSelectedTempo(e.target.value)}
+                    className="w-1/3 bg-slate-900 border border-slate-600 rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="Slow">Slow</option>
+                    <option value="Mid-Tempo">Mid</option>
+                    <option value="Up-Tempo">Fast</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                 <label className="text-sm text-slate-400 font-medium flex items-center gap-2">
+                    <Languages size={16} />
+                    가사 언어 선택 (Lyrics Language)
+                 </label>
+                 <select 
+                    value={lyricsLanguage}
+                    onChange={(e) => setLyricsLanguage(e.target.value)}
+                    className={`w-full border rounded-xl p-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors ${
+                        lyricsLanguage === 'Instrumental' 
+                        ? 'bg-slate-800 border-indigo-500 text-indigo-300' 
+                        : 'bg-slate-900 border-slate-600 text-white'
+                    }`}
+                  >
+                    {languageOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 flex justify-end">
+            <button 
+              onClick={callGeminiAPI}
+              disabled={isLoading || !selectedLocation || !selectedGenre}
+              className={`
+                flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-white shadow-lg transition-all
+                ${isLoading 
+                  ? 'bg-slate-700 cursor-wait opacity-80' 
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 hover:shadow-indigo-500/25 active:scale-95'}
+              `}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  AI가 콘텐츠 풀 패키지 제작 중...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={20} />
+                  AI 풀 패키지 생성 (음악+가사+커버+설명)
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="p-4 bg-red-900/50 border border-red-700 text-red-200 rounded-xl text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Output Section */}
+        {(generatedResult.title || isLoading) && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex items-center gap-2 text-indigo-300 font-semibold text-lg px-2">
+              <FileText size={20} />
+              2. 생성 결과 (Creative Package)
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 1. Title & Suno Prompt */}
+                <div className="space-y-6">
+                    {/* Title Card */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 relative group hover:border-indigo-500/50 transition-colors">
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Song Title</span>
+                            <button 
+                            onClick={() => handleCopy(generatedResult.title, 'title')}
+                            className="text-slate-400 hover:text-white transition-colors p-1"
+                            title="Copy Title"
+                            >
+                            {copyStatus.title ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                            </button>
+                        </div>
+                        {isLoading ? (
+                            <div className="h-8 bg-slate-700 rounded animate-pulse w-1/2" />
+                        ) : (
+                            <h3 className="text-2xl font-bold text-white bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                            {generatedResult.title}
+                            </h3>
+                        )}
+                    </div>
+
+                    {/* Suno Prompt Card */}
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 relative group hover:border-indigo-500/50 transition-colors h-full">
+                        <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Suno v5.0 Prompt</span>
+                            <button 
+                            onClick={() => handleCopy(generatedResult.prompt, 'prompt')}
+                            className="text-slate-400 hover:text-white transition-colors p-1"
+                            title="Copy Prompt"
+                            >
+                            {copyStatus.prompt ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                            </button>
+                        </div>
+                        {isLoading ? (
+                            <div className="space-y-2">
+                            <div className="h-4 bg-slate-700 rounded animate-pulse w-full" />
+                            <div className="h-4 bg-slate-700 rounded animate-pulse w-3/4" />
+                            </div>
+                        ) : (
+                            <p className="text-slate-200 text-lg leading-relaxed font-medium">
+                            {generatedResult.prompt}
+                            </p>
+                        )}
+                        {!isLoading && (
+                            <div className="mt-3 text-xs text-slate-500 flex gap-2">
+                            <span className="bg-slate-900 px-2 py-1 rounded text-indigo-300 font-bold">
+                                {selectedGenre.split('(')[0].trim() || 'Genre'}
+                            </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* 2. Lyrics Card (or Instrumental) */}
+                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 relative group hover:border-indigo-500/50 transition-colors flex flex-col">
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest">Lyrics ({lyricsLanguage})</span>
+                            <span className="text-[10px] bg-indigo-900 text-indigo-200 px-2 py-0.5 rounded-full">AI Generated</span>
+                        </div>
+                        {lyricsLanguage !== 'Instrumental' && (
+                            <button 
+                                onClick={() => handleCopy(generatedResult.lyrics, 'lyrics')}
+                                className="text-slate-400 hover:text-white transition-colors p-1"
+                                title="Copy Lyrics"
+                            >
+                                {copyStatus.lyrics ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                            </button>
+                        )}
+                    </div>
+                    {isLoading ? (
+                    <div className="space-y-3 flex-1">
+                        <div className="h-4 bg-slate-700 rounded animate-pulse w-1/3" />
+                        <div className="h-4 bg-slate-700 rounded animate-pulse w-2/3" />
+                        <div className="h-4 bg-slate-700 rounded animate-pulse w-1/2" />
+                        <div className="h-20 bg-slate-700 rounded animate-pulse w-full mt-4" />
+                    </div>
+                    ) : (
+                    <div className="bg-slate-900/50 rounded-xl p-4 flex-1 overflow-y-auto custom-scrollbar border border-slate-700/50 max-h-[300px]">
+                        <pre className="whitespace-pre-wrap text-slate-300 font-sans text-sm leading-7">
+                        {generatedResult.lyrics}
+                        </pre>
+                    </div>
+                    )}
+                </div>
+            </div>
+
+            {/* NEW: Album Art & YouTube Description Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                
+                {/* Album Art Prompt */}
+                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 relative group hover:border-pink-500/50 transition-colors">
+                    <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2 text-pink-300">
+                            <Image size={18} />
+                            <span className="text-xs font-mono text-pink-400 uppercase tracking-widest">Album Art Prompt</span>
+                        </div>
+                        <button 
+                            onClick={() => handleCopy(generatedResult.albumArt, 'albumArt')}
+                            className="text-slate-400 hover:text-white transition-colors p-1"
+                            title="Copy Image Prompt"
+                        >
+                            {copyStatus.albumArt ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                        </button>
+                    </div>
+                    {isLoading ? (
+                        <div className="space-y-2">
+                             <div className="h-4 bg-slate-700 rounded animate-pulse w-full" />
+                             <div className="h-4 bg-slate-700 rounded animate-pulse w-5/6" />
+                        </div>
+                    ) : (
+                        <div>
+                             <p className="text-slate-300 text-sm leading-relaxed mb-3">
+                                {generatedResult.albumArt}
+                             </p>
+                             <span className="text-[10px] bg-pink-900/30 text-pink-300 border border-pink-700/50 px-2 py-1 rounded">
+                                Use in Midjourney / DALL-E
+                             </span>
+                        </div>
+                    )}
+                </div>
+
+                {/* YouTube Description */}
+                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 relative group hover:border-red-500/50 transition-colors">
+                     <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2 text-red-300">
+                            <Video size={18} />
+                            <span className="text-xs font-mono text-red-400 uppercase tracking-widest">YouTube Story</span>
+                        </div>
+                        <button 
+                            onClick={() => handleCopy(generatedResult.story, 'story')}
+                            className="text-slate-400 hover:text-white transition-colors p-1"
+                            title="Copy Description"
+                        >
+                            {copyStatus.story ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                        </button>
+                    </div>
+                    {isLoading ? (
+                        <div className="space-y-2">
+                             <div className="h-4 bg-slate-700 rounded animate-pulse w-full" />
+                             <div className="h-4 bg-slate-700 rounded animate-pulse w-full" />
+                             <div className="h-4 bg-slate-700 rounded animate-pulse w-2/3" />
+                        </div>
+                    ) : (
+                        <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/50 max-h-[150px] overflow-y-auto custom-scrollbar">
+                             <pre className="whitespace-pre-wrap text-slate-300 font-sans text-sm leading-6">
+                                {generatedResult.story}
+                             </pre>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+            
+          </div>
+        )}
+
+      </main>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1e293b;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #475569;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default SunoPromptBuilder;
